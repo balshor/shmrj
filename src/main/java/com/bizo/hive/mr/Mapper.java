@@ -28,4 +28,11 @@ public interface Mapper {
    * @throws Exception on error
    */
   void map(String[] record, Output output) throws Exception;
+  
+  /**
+   * Called after all rows have been mapped.
+   * 
+   * @throws Exception
+   */
+  void close() throws Exception;
 }

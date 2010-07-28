@@ -34,4 +34,9 @@ public interface Reducer {
    * @throws Exception
    */
   void reduce(String key, Iterator<String[]> records, Output output) throws Exception;
+  
+  /**
+   * Called after all rows have been reduced.
+   */
+  void close() throws Exception;
 }

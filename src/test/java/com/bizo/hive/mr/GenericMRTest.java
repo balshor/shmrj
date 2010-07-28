@@ -18,6 +18,7 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import junit.framework.Assert;
 
@@ -28,7 +29,7 @@ public class GenericMRTest {
 
   @Test(expected=NoSuchElementException.class)
   public void testReduceTooFar() throws Exception {
-    new GenericMR().reduce(new StringReader("a\tb\tc"), new StringWriter(), new Reducer() {
+    new GenericMR().reduce(new StringReader("a\tb\tc"), new StringWriter(), new AbstractReducer() {
       @Override
       public void reduce(String key, Iterator<String[]> records, Output output) throws Exception {
         while (true) {
@@ -58,10 +59,13 @@ public class GenericMRTest {
   }
   
   @Test
-  public void testKVSplitMap() throws Exception {
+  public void testKVSplitMapWithClose() throws Exception {
     final String in = "k1=v1,k2=v2\nk1=v2,k2=v3";
     final String expected = "k1\tv1\nk2\tv2\nk1\tv2\nk2\tv3\n";
     final StringWriter out = new StringWriter();
+    
+    // atomicity is not really required, but it's a convenient int container
+    final AtomicInteger closedCounter = new AtomicInteger(0);
     
     new GenericMR().map(new StringReader(in), out, new Mapper() {
       public void map(String[] record, Output output) throws Exception {
@@ -69,10 +73,20 @@ public class GenericMRTest {
           final String[] kv = kvs.split("=");
           output.collect(new String[] { kv[0], kv[1] });
         }
+        
+        // assert mapper is not closed yet
+        Assert.assertEquals(0, closedCounter.get());
+      }
+      
+      public void close() throws Exception {
+        closedCounter.getAndIncrement();
       }
     });
     
     Assert.assertEquals(expected, out.toString());
+    
+    // assert mapper is closed
+    Assert.assertEquals(1, closedCounter.get());
   }
   
   @Test
@@ -86,9 +100,12 @@ public class GenericMRTest {
   }
   
   @Test
-  public void testWordCountReduce() throws Exception {
+  public void testWordCountReduceWithClose() throws Exception {
     final String in = "hello\t1\nhello\t2\nokay\t4\nokay\t6\nokay\t2";
     final StringWriter out = new StringWriter();
+
+    // atomicity is not really required, but it's a convenient int container
+    final AtomicInteger closedCounter = new AtomicInteger(0);
     
     new GenericMR().reduce(new StringReader(in), out, new Reducer() {
       @Override
@@ -100,25 +117,36 @@ public class GenericMRTest {
         }
         
         output.collect(new String[] { key, String.valueOf(count) });
+        
+        // assert reducer is not closed yet
+        Assert.assertEquals(0, closedCounter.get());
+      }
+      
+      public void close() throws Exception {
+        closedCounter.getAndIncrement();
       }
     });
     
     final String expected = "hello\t3\nokay\t12\n";
     
     Assert.assertEquals(expected, out.toString());
+    
+    // assert reducer is closed
+    Assert.assertEquals(1, closedCounter.get());
   }
   
   private Mapper identityMapper() {
-    return new Mapper() {
+    return new AbstractMapper() {
       @Override
       public void map(String[] record, Output output) throws Exception {
         output.collect(record);
       }
     };
+
   }
   
   private Reducer identityReducer() {
-   return new Reducer() {
+   return new AbstractReducer() {
     @Override
     public void reduce(String key, Iterator<String[]> records, Output output) throws Exception {
       while (records.hasNext()) {

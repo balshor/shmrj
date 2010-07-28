@@ -1,4 +1,5 @@
 package com.bizo.hive.mr;
+
 /*
  * Copyright 2009 bizo.com
  * 
@@ -28,20 +29,16 @@ import java.util.NoSuchElementException;
 import org.apache.commons.lang.StringUtils;
 
 /**
- * This class attempts to provide a simple framework for writing Hive map/reduce
- * tasks in java.
+ * This class attempts to provide a simple framework for writing Hive map/reduce tasks in java.
  * 
- * The main benefit is that it deals with grouping the keys together for reduce
- * tasks.
+ * The main benefit is that it deals with grouping the keys together for reduce tasks.
  * 
- * Additionally, it deals with all system io... and provides something closer to
- * the hadoop m/r.
+ * Additionally, it deals with all system io... and provides something closer to the hadoop m/r.
  * 
  * As an example, here's the wordcount reduce:
  * 
- * new GenericMR().reduce(System.in, System.out, new Reducer() { public void
- * reduce(String key, Iterator<String[]> records, Output output) throws
- * Exception { int count = 0;
+ * new GenericMR().reduce(System.in, System.out, new Reducer() { public void reduce(String key, Iterator<String[]>
+ * records, Output output) throws Exception { int count = 0;
  * 
  * while (records.hasNext()) { count += Integer.parseInt(records.next()[1]); }
  * 
@@ -61,6 +58,10 @@ public final class GenericMR {
       public void processNext(RecordReader reader, Output output) throws Exception {
         mapper.map(reader.next(), output);
       }
+
+      public void close() throws Exception {
+        mapper.close();
+      }
     });
   }
 
@@ -73,6 +74,10 @@ public final class GenericMR {
       @Override
       public void processNext(RecordReader reader, Output output) throws Exception {
         reducer.reduce(reader.peek()[0], new KeyRecordIterator(reader.peek()[0], reader), output);
+      }
+
+      public void close() throws Exception {
+        reducer.close();
       }
     });
   }
@@ -87,15 +92,21 @@ public final class GenericMR {
       }
     } finally {
       try {
-        output.close();
+        processor.close();
       } finally {
-        reader.close();
+        try {
+          output.close();
+        } finally {
+          reader.close();
+        }
       }
     }
   }
 
   private static interface RecordProcessor {
     void processNext(final RecordReader reader, final Output output) throws Exception;
+
+    void close() throws Exception;
   }
 
   private static final class KeyRecordIterator implements Iterator<String[]> {
